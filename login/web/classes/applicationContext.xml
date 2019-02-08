@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+            http://www.springframework.org/schema/beans/spring-beans.xsd
+            http://www.springframework.org/schema/aop
+            http://www.springframework.org/schema/aop/spring-aop.xsd
+            http://www.springframework.org/schema/context
+            http://www.springframework.org/schema/context/spring-context.xsd
+            http://www.springframework.org/schema/tx
+            http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <!--加载外部文件-->
+    <context:property-placeholder location="classpath:db.properties, classpath:variable.properties"/>
+
+    <!--扫描组件(注解)-->
+    <context:component-scan base-package="com.bjsxt.service.impl" ></context:component-scan>
+
+    <!-- 数据源 -->
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${jdbc.driverClassName}"></property>
+        <property name="url" value="${jdbc.url}"></property>
+        <property name="username" value="${jdbc.username}"></property>
+        <property name="password" value="${jdbc.password}"></property>
+    </bean>
+
+    <!-- SqlSessinFactory对象 -->
+    <bean id="factory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"></property>
+        <property name="typeAliasesPackage" value="com.bjsxt.pojo"></property>
+    </bean>
+
+    <!-- 扫描器 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.bjsxt.mapper"></property>
+        <property name="sqlSessionFactoryBeanName" value="factory"></property>
+    </bean>
+
+    <!-- 注入 -->
+    <bean id="peopleService" class="com.bjsxt.service.impl.PeopleServiceImpl">
+        <!--注释掉，因为使用了通过ByName自动注入-->
+        <property name="peopleMapper" ref="peopleMapper"></property>
+    </bean>
+
+    <!-- aop ,true:使用cglib动态代理，false:使用jdk动态代理-->
+    <aop:aspectj-autoproxy proxy-target-class="true"></aop:aspectj-autoproxy>
+
+    <!--MyBeforeAdvice 实现MethodBeforeAdvice接口，MyAfterAdvice实现AfterReturningAdvice接口-->
+    <bean id="mybefore" class="com.bjsxt.advice.MyBeforeAdvice"></bean>
+    <bean id="myafter" class="com.bjsxt.advice.MyAfterAdvice"></bean>
+
+    <!--在execution表达式表示的地方织入指定的前置和后置通知-->
+    <aop:config>
+        <aop:pointcut expression="execution(* com.bjsxt.service.impl.PeopleServiceImpl.login(..))" id="mypoint"/>
+        <aop:advisor advice-ref="mybefore" pointcut-ref="mypoint"/>
+        <aop:advisor advice-ref="myafter" pointcut-ref="mypoint"/>
+    </aop:config>
+
+    <!--配置声明式事务-->
+    <!--spring-jdbc.jar包中-->
+    <bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager" >
+        <property name="dataSource" ref="dataSource"></property>
+    </bean>
+    <tx:advice id="txAdvice" transaction-manager="txManager">
+        <tx:attributes>
+            <!--哪些方法需要事务管理-->
+            <!--对以insert、delete、update开头的方法进行事务管理-->
+            <tx:method name="insert*"/>
+            <tx:method name="delete*"/>
+            <tx:method name="update*"/>
+            <!--表示除insert*、delete*、update*以外的方法都为 只读事务-->
+            <!--read-only属性的值默认为false, 为false时，表示提交事务。
+            对增、删、改方法建议用提交事务，对查询方法建议用只读事务-->
+            <tx:method name="*" read-only="true"/>
+        </tx:attributes>
+    </tx:advice>
+    <aop:config>
+        <aop:pointcut id="mypoint" expression="execution(* com.bjsxt.service.impl.*.*(..))" />
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="mypoint" />
+    </aop:config>
+
+</beans>
